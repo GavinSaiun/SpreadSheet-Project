@@ -1,0 +1,319 @@
+package sheep.games.tetros;
+
+import sheep.expression.TypeError;
+import sheep.expression.basic.Constant;
+import sheep.expression.basic.Nothing;
+import sheep.features.Feature;
+import sheep.games.random.RandomTile;
+import sheep.sheets.CellLocation;
+import sheep.sheets.Sheet;
+import sheep.ui.*;
+
+import java.util.*;
+
+public class Tetros implements Tick, Feature {
+    private final Sheet sheet;
+    private boolean started = false;
+
+    @Override
+    public void register(UI ui) {
+        ui.onTick(this);
+
+        // Get Move is fine as it calls Move, will change Later
+        ui.addFeature("tetros", "Start Tetros", new GameStart());
+        ui.onKey("a", "Move Left", new Move(-1));
+        ui.onKey("d", "Move Right", new Move(1));
+        ui.onKey("q", "Rotate Left", new Rotate(-1));
+        ui.onKey("e", "Rotate Right", new Rotate(1));
+        ui.onKey("s", "Drop", new Move(0));
+    }
+
+    private int blockType = 1;
+    private List<CellLocation> tetrosCells = new ArrayList<>();
+
+    // Checks if new shifted location is in bounds
+    private boolean isStopper(CellLocation location) {
+        // # Bug 3 was >, shouldve been >=
+        if (location.getRow() >= sheet.getRows()) {
+            return true;
+        }
+        if (location.getColumn() >= sheet.getColumns()) {
+            return true;
+        }
+
+        return !(sheet.valueAt(location.getRow(), location.getColumn()).getContent().equals(""));
+
+    }
+
+    public boolean inBounds(List<CellLocation> locations) {
+        for (CellLocation location : locations.subList(3, locations.size())) {
+            if (!sheet.contains(location)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public boolean dropTile() {
+        List<CellLocation> droppedCells = new ArrayList<>();
+        for (CellLocation cell : tetrosCells) {
+            droppedCells.add(new CellLocation(cell.getRow() + 1, cell.getColumn()));
+        }
+        removeCells();
+        for (CellLocation cell : droppedCells) {
+            if (isStopper(cell)) {
+                RenderCells(tetrosCells);
+                return true;
+            }
+        }
+        RenderCells(droppedCells);
+        this.tetrosCells = droppedCells;
+        return false;
+    }
+
+    public void fullDrop() {
+        while (!dropTile()) {
+            // keep dropping until dropTile method is truex
+        }
+    }
+
+    public void shift(int x) {
+        //# bug 4, was x == 2, made it so that pressing s calls fulldrop()
+        if (x == 0) {
+            fullDrop();
+        }
+
+        List<CellLocation> shiftedCells = new ArrayList<>();
+        // BUG #2 tile.getColumn() was incremented by an extra 1
+        // BUG #5 cellLocation cannot be negative, yet shifting left would make column neg
+        for (CellLocation cell : tetrosCells) {
+            int shiftedCell = cell.getColumn() + x;
+
+            if (shiftedCell >= 0 && shiftedCell < sheet.getColumns()) {
+                shiftedCells.add(new CellLocation(cell.getRow(), shiftedCell));
+            } else {
+                return;
+            }
+        }
+
+        // BUG #1 was inBounds, had to be !inBounds
+        if (!inBounds(shiftedCells)) {
+            return;
+        }
+
+        removeCells();
+        RenderCells(shiftedCells);
+        this.tetrosCells = shiftedCells;
+    }
+
+    public void removeCells() {
+        for (CellLocation cell : tetrosCells) {
+            try {
+                sheet.update(cell, new Nothing());
+            } catch (TypeError e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public void RenderCells(List<CellLocation> items) {
+        for (CellLocation cell : items) {
+            try {
+                sheet.update(cell, new Constant(blockType));
+            } catch (TypeError e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public final RandomTile randomTile;
+
+    public Tetros(Sheet sheet, RandomTile randomTile) {
+        this.sheet = sheet;
+        this.randomTile = randomTile;
+    }
+
+    private boolean drop() {
+        tetrosCells = new ArrayList<>();
+        newPiece();
+        for (CellLocation cell : tetrosCells) {
+            if (!sheet.valueAt(cell).render().equals("")) {
+                return true;
+            }
+        }
+        RenderCells(tetrosCells);
+
+        return false;
+    }
+
+    private void newPiece() {
+        int value = randomTile.pick();
+        switch (value) {
+            case 1 -> {
+                tetrosCells.add(new CellLocation(0, 0));
+                tetrosCells.add(new CellLocation(1, 0));
+                tetrosCells.add(new CellLocation(2, 0));
+                tetrosCells.add(new CellLocation(2, 1));
+                blockType = 7;
+            }
+            case 2 -> {
+                tetrosCells.add(new CellLocation(0, 1));
+                tetrosCells.add(new CellLocation(1, 1));
+                tetrosCells.add(new CellLocation(2, 1));
+                tetrosCells.add(new CellLocation(2, 0));
+                blockType = 5;
+            }
+            case 3 -> {
+                tetrosCells.add(new CellLocation(0, 0));
+                tetrosCells.add(new CellLocation(0, 1));
+                tetrosCells.add(new CellLocation(0, 2));
+                tetrosCells.add(new CellLocation(1, 1));
+                blockType = 8;
+            }
+            case 4 -> {
+                tetrosCells.add(new CellLocation(0, 0));
+                tetrosCells.add(new CellLocation(0, 1));
+                tetrosCells.add(new CellLocation(1, 0));
+                tetrosCells.add(new CellLocation(1, 1));
+                blockType = 3;
+            }
+            case 5 -> {
+                tetrosCells.add(new CellLocation(0, 0));
+                tetrosCells.add(new CellLocation(1, 0));
+                tetrosCells.add(new CellLocation(2, 0));
+                tetrosCells.add(new CellLocation(3, 0));
+                blockType = 6;
+            }
+            case 6 -> {
+                tetrosCells.add(new CellLocation(0, 1));
+                tetrosCells.add(new CellLocation(0, 2));
+                tetrosCells.add(new CellLocation(1, 1));
+                tetrosCells.add(new CellLocation(0, 1));
+                blockType = 2;
+            }
+            case 0 -> {
+                tetrosCells.add(new CellLocation(0, 0));
+                tetrosCells.add(new CellLocation(0, 1));
+                tetrosCells.add(new CellLocation(1, 1));
+                tetrosCells.add(new CellLocation(1, 2));
+                blockType = 4;
+            }
+        }
+    }
+
+    private void flip(int direction) {
+        int averageColumn = 0;
+        int averageRow = 0;
+
+        for (CellLocation cellLocation : tetrosCells) {
+            averageColumn += cellLocation.getColumn();
+            averageRow += cellLocation.getRow();
+        }
+
+        averageColumn /= tetrosCells.size();
+        averageRow /= tetrosCells.size();
+
+        List<CellLocation> flippedPositions = new ArrayList<>();
+
+        for (CellLocation cell : tetrosCells) {
+            int flippedCellColumn = averageColumn + ((averageRow - cell.getRow()) * direction);
+            int flippedCellRow = averageRow + ((averageColumn - cell.getColumn()) * direction);
+            CellLocation flippedCell = new CellLocation(flippedCellRow, flippedCellColumn);
+            flippedPositions.add(flippedCell);
+        }
+
+        if (!inBounds(flippedPositions)) {
+            return;
+        }
+
+        removeCells();
+        tetrosCells = flippedPositions;
+        RenderCells(flippedPositions);
+    }
+
+    @Override
+    public boolean onTick(Prompt prompt) {
+        if (!started) {
+            return false;
+        }
+
+
+        if (dropTile()) {
+            if (drop()) {
+                prompt.message("Game Over!");
+                started = false;
+            }
+        }
+        lineClear();
+        return true;
+    }
+
+    private void lineClear() {
+        for (int row = sheet.getRows() - 1; row >= 0; row--) {
+            boolean full = true;
+            for (int col = 0; col < sheet.getColumns(); col++) {
+                if (sheet.valueAt(row, col).getContent().equals("")) {
+                    full = false;
+                }
+            }
+            if (full) {
+                for (int rowX = row; rowX > 0; rowX--) {
+                    for (int col = 0; col < sheet.getColumns(); col++) {
+                        try {
+                            if (tetrosCells.contains(new CellLocation(rowX - 1, col))) {
+                                continue;
+                            }
+                            sheet.update(new CellLocation(rowX, col),
+                                    sheet.valueAt(new CellLocation(rowX - 1, col)));
+                        } catch (TypeError e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }
+                row = row + 1;
+            }
+        }
+    }
+
+
+    public class GameStart implements Perform {
+        @Override
+        public void perform(int row, int column, Prompt prompt) {
+            started = true;
+            drop();
+        }
+    }
+
+    public class Move implements Perform {
+        private final int direction;
+
+        public Move(int direction) {
+            this.direction = direction;
+        }
+
+        @Override
+        public void perform(int row, int column, Prompt prompt) {
+            if (!started) {
+                return;
+            }
+
+            shift(direction);
+        }
+    }
+
+    public class Rotate implements Perform {
+        private final int direction;
+
+        public Rotate(int direction) {
+            this.direction = direction;
+        }
+
+        @Override
+        public void perform(int row, int column, Prompt prompt) {
+            if (!started) {
+                return;
+            }
+            flip(direction);
+        }
+    }
+}
